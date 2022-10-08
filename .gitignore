@@ -45,3 +45,4 @@ Temporary Items
 
 ### Project
 .idea
+/.env.private
