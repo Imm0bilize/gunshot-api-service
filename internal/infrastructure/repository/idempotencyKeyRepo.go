@@ -32,8 +32,9 @@ func (r *RequestIdempotencyKeyRepo) Commit(ctx context.Context, uid string) erro
 	return r.db.Set(ctx, uid, true, r.ttl).Err()
 }
 
-func NewIdempotencyKeyRepo(db *redis.Client) *RequestIdempotencyKeyRepo {
+func NewIdempotencyKeyRepo(db *redis.Client, ttl time.Duration) *RequestIdempotencyKeyRepo {
 	return &RequestIdempotencyKeyRepo{
-		db: db,
+		db:  db,
+		ttl: ttl,
 	}
 }
