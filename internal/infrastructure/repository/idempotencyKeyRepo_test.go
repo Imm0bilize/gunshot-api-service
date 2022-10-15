@@ -56,7 +56,7 @@ func (s *IdempotenceKeySuite) SetupSuite() {
 		Addr: endpoint,
 	})
 
-	s.db = repository.NewIdempotencyKeyRepo(s.client)
+	s.db = repository.NewIdempotencyKeyRepo(s.client, time.Second*20)
 }
 
 func (s *IdempotenceKeySuite) TestIsExist() {
