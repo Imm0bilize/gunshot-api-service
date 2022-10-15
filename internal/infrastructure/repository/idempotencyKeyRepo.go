@@ -21,7 +21,6 @@ func (r *RequestIdempotencyKeyRepo) IsExist(ctx context.Context, uid string) (bo
 	}
 
 	if n != 1 {
-
 		return false, nil
 	}
 
