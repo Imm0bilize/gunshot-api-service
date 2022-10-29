@@ -2,6 +2,7 @@ package http
 
 import (
 	v1 "github.com/Imm0bilize/gunshot-api-service/internal/controller/http/v1"
+	"github.com/Imm0bilize/gunshot-api-service/internal/uCase"
 	"github.com/gin-gonic/gin"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
 	"go.uber.org/zap"
@@ -9,12 +10,12 @@ import (
 	"net/http/pprof"
 )
 
-func New(logger *zap.Logger, middlewares ...gin.HandlerFunc) (*gin.Engine, error) {
+func New(logger *zap.Logger, domain *uCase.UseCase) (*gin.Engine, error) {
 	router := gin.New()
 
-	router.Use(middlewares...)
+	router.Use(gin.Logger())
 
-	//trace
+	// trace
 	router.Use(otelgin.Middleware("gunshot-api-service"))
 
 	// Debug handlers
@@ -22,7 +23,7 @@ func New(logger *zap.Logger, middlewares ...gin.HandlerFunc) (*gin.Engine, error
 	initPprof(router.Group("/debug"))
 
 	// API
-	initApi(router, logger)
+	initAPI(router, logger, domain)
 
 	return router, nil
 }
@@ -45,11 +46,11 @@ func initPprof(router *gin.RouterGroup) {
 	}
 }
 
-func initApi(router *gin.Engine, logger *zap.Logger) {
-	handlerV1 := v1.NewHandler(logger)
+func initAPI(router *gin.Engine, logger *zap.Logger, domain *uCase.UseCase) {
+	handlerV1 := v1.NewHandler(logger, domain)
 
 	api := router.Group("/api")
 	{
-		handlerV1.InitApi(api)
+		handlerV1.InitAPI(api)
 	}
 }
