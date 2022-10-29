@@ -4,13 +4,16 @@ import (
 	"context"
 	"fmt"
 	"github.com/go-redis/redis/v9"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/trace"
 	"time"
 )
 
 // RequestIdempotencyKeyRepo repository for idempotency keys
 type RequestIdempotencyKeyRepo struct {
-	db  *redis.Client
-	ttl time.Duration
+	db     *redis.Client
+	ttl    time.Duration
+	tracer trace.Tracer
 }
 
 // IsExist checks for the presence of the key in the repository
@@ -33,8 +36,10 @@ func (r *RequestIdempotencyKeyRepo) Commit(ctx context.Context, uid string) erro
 }
 
 func NewIdempotencyKeyRepo(db *redis.Client, ttl time.Duration) *RequestIdempotencyKeyRepo {
+	tracer := otel.Tracer("IdempotencyKeyRepo")
 	return &RequestIdempotencyKeyRepo{
-		db:  db,
-		ttl: ttl,
+		db:     db,
+		ttl:    ttl,
+		tracer: tracer,
 	}
 }
