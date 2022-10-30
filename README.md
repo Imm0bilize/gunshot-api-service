@@ -18,7 +18,6 @@ DB_PASSWORD
 ```
 
 ### TODO:
-1. [ ] Use mongo instead of redis
-2. [ ] Сonfigure CI/CD pipeline
-   3. [ ] golangci-lint
-   4. [ ] create pipeline
+1. [ ] golangci-lint (configure CI/CD pipeline)
+2. [ ] create pipeline (configure CI/CD pipeline)
+3. [ ] use mongo instead of redis
