@@ -8,7 +8,7 @@ import (
 )
 
 type ClientRepo interface {
-	Create(ctx context.Context, uid string, info []byte) error
+	Create(ctx context.Context, info []byte) (string, error)
 	Delete(ctx context.Context, uid string) error
 }
 

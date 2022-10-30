@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"github.com/Imm0bilize/gunshot-api-service/internal/controller/http/dto"
-	"github.com/google/uuid"
 	"github.com/pkg/errors"
 )
 
@@ -21,8 +20,8 @@ func (u *UseCase) CreateNewClient(ctx context.Context, reqID string, information
 		return "", errors.Wrap(err, "error when marshal client information")
 	}
 
-	uid := uuid.NewString()
-	if err := u.clientRepo.Create(ctx, uid, bInfo); err != nil {
+	uid, err := u.clientRepo.Create(ctx, bInfo)
+	if err != nil {
 		return "", errors.Wrap(err, "error when create new client in repo")
 	}
 
