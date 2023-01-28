@@ -2,40 +2,42 @@ package uCase
 
 import (
 	"context"
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/trace"
+	"github.com/Imm0bilize/gunshot-api-service/internal/entities"
+	"github.com/google/uuid"
 	"go.uber.org/zap"
 )
 
-type ClientRepo interface {
-	Create(ctx context.Context, info []byte) (string, error)
-	Delete(ctx context.Context, uid string) error
+var (
+	_ ClientUseCase = Client{}
+	_ AudioUseCase  = Audio{}
+)
+
+type ClientUseCase interface {
+	Create(ctx context.Context, reqID uuid.UUID, client *entities.Client) (string, error)
+	Get(ctx context.Context, reqID uuid.UUID, id string) (entities.Client, error)
+	Update(ctx context.Context, reqID uuid.UUID, id string, client *entities.Client) error
+	Delete(ctx context.Context, reqID uuid.UUID, id string) error
 }
 
-type RequestIdempotencyKey interface {
-	IsExist(ctx context.Context, uid string) (bool, error)
-	Commit(ctx context.Context, uid string) error
+type AudioUseCase interface {
+	Upload(ctx context.Context, reqID uuid.UUID, id string, msg entities.AudioMessage) error
 }
 
 type UseCase struct {
-	logger      *zap.Logger
-	tracer      trace.Tracer
-	requestRepo RequestIdempotencyKey
-	clientRepo  ClientRepo
+	Client ClientUseCase
+	Audio  AudioUseCase
 }
 
-func NewUseCase(logger *zap.Logger, clientRepo ClientRepo, requestRepo RequestIdempotencyKey) (*UseCase, error) {
-	tracer := otel.Tracer("uCase")
-	if tracer == nil {
-		return nil, ErrTraceProviderIsNotSet
-	}
+type Params struct {
+	Logger      *zap.Logger
+	ClientRepo  ClientRepo
+	AudioSender Sender
+	AudioLength int
+}
 
-	uCase := &UseCase{
-		logger:      logger,
-		tracer:      tracer,
-		clientRepo:  clientRepo,
-		requestRepo: requestRepo,
-	}
-
-	return uCase, nil
+func NewUseCase(params Params) (*UseCase, error) {
+	return &UseCase{
+		Client: NewClientUCase(params.Logger, params.ClientRepo),
+		Audio:  NewAudioUCase(params.Logger, params.AudioSender, params.AudioLength),
+	}, nil
 }
