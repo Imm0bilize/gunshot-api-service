@@ -2,84 +2,188 @@ package repository_test
 
 import (
 	"context"
+	"fmt"
+	"github.com/Imm0bilize/gunshot-api-service/internal/entities"
 	"github.com/Imm0bilize/gunshot-api-service/internal/infrastructure/repository"
-	"github.com/go-redis/redis/v9"
-	"github.com/google/uuid"
+	"github.com/docker/go-connections/nat"
 	"github.com/stretchr/testify/suite"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 	"testing"
+	"time"
+)
+
+const (
+	_mongoImageName = "mongo:5.0.9"
+	_dbName         = "GunshotService"
+	_collectionName = "Clients"
 )
 
 type ClientRepoSuite struct {
 	suite.Suite
-	db        *repository.ClientRepo
-	client    *redis.Client
+	repo      *repository.ClientRepo
+	dbClient  *mongo.Client
 	container testcontainers.Container
+}
+
+var tempoClient = &entities.Client{
+	ID:                  primitive.ObjectID{},
+	LocationName:        "test",
+	FullName:            "test test",
+	Latitude:            52.124,
+	Longitude:           12.235,
+	NotificationMethods: nil,
 }
 
 func TestClientRepoSuite(t *testing.T) {
 	suite.Run(t, new(ClientRepoSuite))
 }
 
-func (s *ClientRepoSuite) SetupSuite() {
+func (c *ClientRepoSuite) SetupSuite() {
 	ctx := context.Background()
 
+	port, err := nat.NewPort("", "27017")
+	c.Require().NoError(err)
+
 	req := testcontainers.ContainerRequest{
-		Image:        redisImageName,
-		ExposedPorts: []string{"6379/tcp"},
-		WaitingFor:   wait.ForLog("* Ready to accept connections"),
+		Image:        _mongoImageName,
+		ExposedPorts: []string{string(port)},
+		WaitingFor:   wait.ForListeningPort(port),
 	}
 
-	redisC, err := testcontainers.GenericContainer(
+	mongoC, err := testcontainers.GenericContainer(
 		ctx,
 		testcontainers.GenericContainerRequest{
 			ContainerRequest: req,
 			Started:          true,
 		},
 	)
+	c.Require().NoError(err)
+
+	c.container = mongoC
+	endpoint, err := c.container.Endpoint(ctx, "")
 	if err != nil {
-		s.T().Fatal(err)
+		c.T().Fatal(err)
 	}
 
-	s.container = redisC
+	mongoClient, err := mongo.Connect(ctx, options.Client().ApplyURI(fmt.Sprintf("mongodb://%s", endpoint)))
+	c.Require().NoError(err)
 
-	endpoint, err := s.container.Endpoint(ctx, "")
-	if err != nil {
-		s.T().Fatal(err)
+	c.dbClient = mongoClient
+	c.repo = repository.NewClientRepo(mongoClient.Database(_dbName))
+}
+
+func (c *ClientRepoSuite) TearDownSuite() {
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	c.Require().NoError(c.dbClient.Disconnect(ctx))
+	c.Require().NoError(c.container.Terminate(ctx))
+}
+
+func (c *ClientRepoSuite) TestCreate() {
+	testTable := []struct {
+		name   string
+		client *entities.Client
+	}{
+		{
+			name:   "default creating",
+			client: tempoClient,
+		},
 	}
 
-	s.client = redis.NewClient(&redis.Options{
-		Addr: endpoint,
-	})
+	for _, testCase := range testTable {
+		c.Run(testCase.name, func() {
+			id, err := c.repo.Create(context.Background(), testCase.client)
+			c.Require().NoError(err)
 
-	s.db = repository.NewClientRepo(s.client)
+			objectID, err := primitive.ObjectIDFromHex(id)
+			c.Require().NoError(err)
+
+			testCase.client.ID = objectID
+			var gotClient *entities.Client
+
+			err = c.dbClient.Database(_dbName).Collection(_collectionName).FindOne(
+				context.Background(),
+				bson.M{
+					"_id": objectID,
+				},
+			).Decode(&gotClient)
+			c.Require().NoError(err)
+
+			c.Equal(testCase.client, gotClient)
+		})
+	}
 }
 
-func (s *ClientRepoSuite) TestCreate() {
-	uid := uuid.NewString()
-	info := []byte(`{"info": "test"}`)
+func (c *ClientRepoSuite) TestGet() {
+	testTable := []struct {
+		name           string
+		id             string
+		createClientFn func() (string, error)
+		expErr         error
+	}{
+		{
+			name:   "incorrect id",
+			id:     "test",
+			expErr: primitive.ErrInvalidHex,
+		},
+		{
+			name:   "no client with the id",
+			id:     "507f191e810c19729de860ea",
+			expErr: repository.ErrClientNotFound,
+		},
+		{
+			name:   "existing id",
+			expErr: nil,
+			createClientFn: func() (string, error) {
+				return c.repo.Create(context.Background(), tempoClient)
+			},
+		},
+	}
 
-	err := s.db.Create(context.TODO(), uid, info)
-	s.Nil(err)
-
-	result, err := s.client.Get(context.TODO(), uid).Bytes()
-	s.Equal(info, result)
+	for _, testCase := range testTable {
+		c.Run(testCase.name, func() {
+			if testCase.createClientFn != nil {
+				id, err := testCase.createClientFn()
+				c.Require().NoError(err)
+				testCase.id = id
+			}
+			_, err := c.repo.Get(context.Background(), testCase.id)
+			c.ErrorIs(err, testCase.expErr)
+		})
+	}
 }
 
-func (s *ClientRepoSuite) TestDeletePositive() {
-	uid := uuid.NewString()
-	info := []byte(`{"info": "test"}`)
+//func (c *ClientRepoSuite) TestUpdate() {
+//	testTable := []struct {
+//		name string
+//	}{
+//		{},
+//	}
+//
+//	for _, testCase := range testTable {
+//		c.Run(testCase.name, func() {
+//
+//		})
+//	}
+//}
 
-	err := s.db.Create(context.TODO(), uid, info)
-	s.Nil(err)
-
-	err = s.db.Delete(context.TODO(), uid)
-	s.Nil(err)
-}
-
-func (s *ClientRepoSuite) TestDeleteNegative() {
-	uid := uuid.NewString()
-	err := s.db.Delete(context.TODO(), uid)
-	s.Equal(err, repository.ErrClientNotFound)
-}
+//
+//func (c *ClientRepoSuite) TestDelete() {
+//	testTable := []struct {
+//		name string
+//	}{
+//		{},
+//	}
+//
+//	for _, testCase := range testTable {
+//		c.Run(testCase.name, func() {
+//
+//		})
+//	}
+//}
