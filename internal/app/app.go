@@ -2,11 +2,19 @@ package app
 
 import (
 	"context"
+	"fmt"
 	"github.com/Imm0bilize/gunshot-api-service/internal/config"
+	"github.com/Imm0bilize/gunshot-api-service/internal/controller/grpc"
 	"github.com/Imm0bilize/gunshot-api-service/internal/controller/http"
+	"github.com/Imm0bilize/gunshot-api-service/internal/infrastructure/msbroker"
 	"github.com/Imm0bilize/gunshot-api-service/internal/infrastructure/repository"
 	"github.com/Imm0bilize/gunshot-api-service/internal/uCase"
-	"github.com/go-redis/redis/v9"
+	"github.com/Shopify/sarama"
+	"github.com/pkg/errors"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.opentelemetry.io/contrib/instrumentation/github.com/Shopify/sarama/otelsarama"
+	"go.opentelemetry.io/contrib/instrumentation/go.mongodb.org/mongo-driver/mongo/otelmongo"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
@@ -16,14 +24,19 @@ import (
 	"go.uber.org/zap"
 	"log"
 	"net"
+	"os"
+	"os/signal"
+	"strings"
+	"syscall"
+	"time"
 )
 
-func createTraceProvider(collectorURL string) func(context.Context) error {
+func createTraceProvider(cfg config.OTELConfig) func(context.Context) error {
 	exporter, err := otlptrace.New(
 		context.Background(),
 		otlptracegrpc.NewClient(
 			otlptracegrpc.WithInsecure(),
-			otlptracegrpc.WithEndpoint(collectorURL),
+			otlptracegrpc.WithEndpoint(net.JoinHostPort(cfg.Host, cfg.Port)),
 		),
 	)
 
@@ -52,6 +65,45 @@ func createTraceProvider(collectorURL string) func(context.Context) error {
 	return exporter.Shutdown
 }
 
+func createKafkaProducer(cfg config.KafkaConfig) (sarama.SyncProducer, error) {
+	kfkCfg := sarama.NewConfig()
+	kfkCfg.Version = sarama.V2_5_0_0
+	kfkCfg.Producer.Return.Successes = true
+
+	producer, err := sarama.NewSyncProducer(strings.Split(cfg.Peers, ","), kfkCfg)
+	if err != nil {
+		return nil, errors.Wrap(err, "error during create producer")
+	}
+
+	producer = otelsarama.WrapSyncProducer(kfkCfg, producer)
+
+	return producer, nil
+}
+
+func createDB(cfg config.DBConfig) (*mongo.Database, func(context.Context) error, error) {
+	clientOptions := options.Client()
+	clientOptions.Monitor = otelmongo.NewMonitor()
+	clientOptions.ApplyURI(fmt.Sprintf("mongodb://%s:%s/", cfg.Host, cfg.Port))
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	client, err := mongo.Connect(ctx, clientOptions)
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "error during create database")
+	}
+
+	if err := client.Ping(ctx, nil); err != nil {
+		return nil, nil, errors.Wrap(err, "error during exec ping")
+	}
+
+	disconnect := func(ctx2 context.Context) error {
+		return client.Disconnect(ctx)
+	}
+
+	return client.Database(cfg.Name), disconnect, nil
+}
+
 func Run(cfg *config.Config) {
 	logger, err := zap.NewDevelopment()
 	if err != nil {
@@ -62,46 +114,78 @@ func Run(cfg *config.Config) {
 	ctx := context.Background()
 
 	// Trace
-	shutdownTraceProvider := createTraceProvider(
-		net.JoinHostPort(cfg.OTEL.Host, cfg.OTEL.Port),
-	)
-
-	defer func(ctx context.Context) {
-		if err := shutdownTraceProvider(ctx); err != nil {
-			logger.Error(err.Error())
-		}
-	}(ctx)
+	shutdownTraceProvider := createTraceProvider(cfg.OTEL)
 
 	// DB
-	db := redis.NewClient(&redis.Options{
-		Addr:     net.JoinHostPort(cfg.DB.Host, cfg.DB.Port),
-		Password: cfg.DB.Password,
-		DB:       0,
-	})
-	if err := db.Ping(ctx).Err(); err != nil {
-		logger.Fatal(err.Error())
-	}
+	db, dbShutdown, err := createDB(cfg.DB)
 	logger.Debug("successfully connected to the database")
 
+	producer, err := createKafkaProducer(cfg.Kafka)
+	if err != nil {
+
+	}
+	// Broker
+	broker := msbroker.NewKafkaProducer(logger, producer, cfg.Kafka.Topic)
+
 	// domain service
-	useCase, err := uCase.NewUseCase(
-		logger,
-		repository.NewClientRepo(db),
-		repository.NewIdempotencyKeyRepo(db, cfg.IdemKey.TTL),
-	)
-
-	if err != nil {
-		logger.Fatal(err.Error())
+	params := uCase.Params{
+		Logger:      logger,
+		Repo:        repository.NewRepo(db),
+		AudioSender: broker,
+		AudioLength: 1000,
 	}
 
-	// http server
-	httpServer, err := http.New(logger, useCase)
+	useCase, err := uCase.NewUseCase(params)
+
 	if err != nil {
-		logger.Fatal(err.Error())
+		logger.Fatal("error when creating business logic of the service", zap.Error(err))
 	}
 
-	httpServer.Run(net.JoinHostPort("", cfg.HTTP.Port))
+	//http server
+	httpServer := http.NewHTTPServer(logger, useCase)
+
 	// grpc server
+	listener, err := net.Listen("tcp", ":"+cfg.GRPC.Port)
+	if err != nil {
+		logger.Fatal(err.Error())
+	}
 
-	// shutdown
+	//httpServer.Run(net.JoinHostPort("", cfg.HTTP.Port))
+	go func() {
+		if err := httpServer.Run(fmt.Sprintf(":%s", cfg.HTTP.Port)); err != nil {
+			panic(err)
+		}
+	}()
+
+	grpcServer := grpc.NewGRPCServer(logger, useCase)
+
+	go func() {
+		if err := grpcServer.Serve(listener); err != nil {
+			log.Fatal("error during grpc server work", zap.Error(err))
+		}
+	}()
+
+	// Shutdown
+	shutdown := make(chan os.Signal)
+	signal.Notify(shutdown, os.Interrupt, syscall.SIGTERM, syscall.SIGINT)
+	<-shutdown
+
+	ctx, shutdownFunc := context.WithTimeout(context.Background(), time.Second*10)
+	defer shutdownFunc()
+
+	if err = grpc.Shutdown(ctx, grpcServer); err != nil {
+		logger.Error("error shutting down grpc server", zap.Error(err))
+	}
+
+	if err = dbShutdown(ctx); err != nil {
+		logger.Error("error when closing database connection", zap.Error(err))
+	}
+
+	if err = broker.Shutdown(); err != nil {
+		logger.Error("error when shutting down broker", zap.Error(err))
+	}
+
+	if err = shutdownTraceProvider(ctx); err != nil {
+		logger.Error("error when shutting down provider", zap.Error(err))
+	}
 }
