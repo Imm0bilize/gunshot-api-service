@@ -3,6 +3,7 @@ package uCase
 import (
 	"context"
 	"github.com/Imm0bilize/gunshot-api-service/internal/entities"
+	"github.com/Imm0bilize/gunshot-api-service/internal/infrastructure/repository"
 	"github.com/google/uuid"
 	"go.uber.org/zap"
 )
@@ -30,14 +31,14 @@ type UseCase struct {
 
 type Params struct {
 	Logger      *zap.Logger
-	ClientRepo  ClientRepo
+	Repo        *repository.Repo
 	AudioSender Sender
 	AudioLength int
 }
 
 func NewUseCase(params Params) (*UseCase, error) {
 	return &UseCase{
-		Client: NewClientUCase(params.Logger, params.ClientRepo),
+		Client: NewClientUCase(params.Logger, params.Repo.Client),
 		Audio:  NewAudioUCase(params.Logger, params.AudioSender, params.AudioLength),
 	}, nil
 }
