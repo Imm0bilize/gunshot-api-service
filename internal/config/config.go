@@ -4,13 +4,14 @@ import (
 	"github.com/joho/godotenv"
 	"github.com/kelseyhightower/envconfig"
 	"github.com/pkg/errors"
-	"time"
 )
 
 type DBConfig struct {
 	Host     string `env:"DB_HOST"`
 	Port     string `env:"DB_PORT"`
+	User     string `env:"DB_USER"`
 	Password string `env:"DB_PASSWORD"`
+	Name     string `env:"DB_NAME"`
 }
 
 type HTTPConfig struct {
@@ -26,16 +27,17 @@ type OTELConfig struct {
 	Port string `env:"OTEL_PORT"`
 }
 
-type IdemKeyConfig struct {
-	TTL time.Duration `env:"IDEMKEY_TTL"`
+type KafkaConfig struct {
+	Peers string `env:"KAFKA_PEERS"`
+	Topic string `env:"KAFKA_TOPIC"`
 }
 
 type Config struct {
-	HTTP    HTTPConfig
-	GRPC    GRPCConfig
-	DB      DBConfig
-	OTEL    OTELConfig
-	IdemKey IdemKeyConfig
+	HTTP  HTTPConfig
+	GRPC  GRPCConfig
+	DB    DBConfig
+	OTEL  OTELConfig
+	Kafka KafkaConfig
 }
 
 func New(envFiles ...string) (*Config, error) {
