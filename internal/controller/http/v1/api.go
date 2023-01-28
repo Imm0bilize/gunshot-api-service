@@ -20,16 +20,28 @@ func NewHandler(logger *zap.Logger, domain *uCase.UseCase) *Handler {
 	}
 }
 
-func (h *Handler) InitAPI(router *gin.RouterGroup) {
+func (h *Handler) InitAPI(router *gin.RouterGroup,
+	injectRequestID, injectClientID func(c *gin.Context),
+) {
+
 	v1 := router.Group("v1")
 	{
-		v1.POST("/register", h.RegisterNewClient)
-
 		client := v1.Group("client")
 		{
-			client.DELETE("", h.DeleteClient)
-			client.PUT("", h.UpdateClient)
-			client.POST("/upload", h.UploadAudio)
+			client.Use(injectRequestID)
+
+			client.POST("/register", h.RegisterNewClient)
+
+			clientID := client.Group(":id")
+			{
+				clientID.Use(injectClientID)
+
+				clientID.GET("", h.GetClient)
+				clientID.PUT("", h.UpdateClient)
+				clientID.DELETE("", h.DeleteClient)
+
+				clientID.POST(":ts/upload", h.UploadAudio)
+			}
 		}
 	}
 }

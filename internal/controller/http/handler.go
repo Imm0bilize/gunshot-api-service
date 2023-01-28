@@ -10,7 +10,7 @@ import (
 	"net/http/pprof"
 )
 
-func New(logger *zap.Logger, domain *uCase.UseCase) (*gin.Engine, error) {
+func NewHTTPServer(logger *zap.Logger, domain *uCase.UseCase) *gin.Engine {
 	router := gin.New()
 
 	router.Use(gin.Logger())
@@ -19,13 +19,13 @@ func New(logger *zap.Logger, domain *uCase.UseCase) (*gin.Engine, error) {
 	router.Use(otelgin.Middleware("gunshot-api-service"))
 
 	// Debug handlers
-	router.GET("/health", func(c *gin.Context) { c.JSON(http.StatusOK, gin.H{"status": "ok"}) })
+	router.GET("/ping", func(c *gin.Context) { c.JSON(http.StatusOK, gin.H{"message": "pong"}) })
 	initPprof(router.Group("/debug"))
 
 	// API
 	initAPI(router, logger, domain)
 
-	return router, nil
+	return router
 }
 
 func initPprof(router *gin.RouterGroup) {
@@ -51,6 +51,6 @@ func initAPI(router *gin.Engine, logger *zap.Logger, domain *uCase.UseCase) {
 
 	api := router.Group("/api")
 	{
-		handlerV1.InitAPI(api)
+		handlerV1.InitAPI(api, InjectRequestIDIntoCtx, InjectClientIDIntoCtx)
 	}
 }
