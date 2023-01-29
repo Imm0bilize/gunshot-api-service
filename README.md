@@ -22,10 +22,10 @@ KAFKA_TOPIC=ApiServiceOutput
 ```
 
 ### TODO:
-1.[x] use mongo
+1. [x] use mongo
 2. [ ] impl grpc and grpc stream
 3. [ ] use auth (jwt token)
 4. [ ] add swagger docs 
-5.[ ] golangci-lint (configure CI/CD pipeline)
-6.[ ] create pipeline (configure CI/CD pipeline)
+5. [ ] golangci-lint (configure CI/CD pipeline)
+6. [ ] create pipeline (configure CI/CD pipeline)
 
