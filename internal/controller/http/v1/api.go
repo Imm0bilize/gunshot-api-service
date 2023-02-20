@@ -30,7 +30,7 @@ func (h *Handler) InitAPI(router *gin.RouterGroup,
 		{
 			client.Use(injectRequestID)
 
-			client.POST("/register", h.RegisterNewClient)
+			client.POST("", h.RegisterNewClient)
 
 			clientID := client.Group(":id")
 			{
