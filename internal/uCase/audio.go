@@ -24,7 +24,7 @@ type Audio struct {
 }
 
 var (
-	errNotEqRequiredLength = errors.New("the audio not equal to the required length")
+	ErrNotEqRequiredLength = errors.New("the audio not equal to the required length")
 )
 
 func NewAudioUCase(logger *zap.Logger, audioSender Sender, audioLength int) *Audio {
@@ -61,7 +61,7 @@ func (a Audio) Upload(ctx context.Context, reqID uuid.UUID, clientID string, msg
 func (a Audio) validate(audio []byte) error {
 	if len(audio) != a.audioLength {
 		return fmt.Errorf(
-			"%w: expected %d (bytes), got %d (bytes)", errNotEqRequiredLength, a.audioLength, len(audio),
+			"%w: expected %d (bytes), got %d (bytes)", ErrNotEqRequiredLength, a.audioLength, len(audio),
 		)
 	}
 
