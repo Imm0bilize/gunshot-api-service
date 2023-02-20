@@ -5,6 +5,7 @@ import (
 	"github.com/Imm0bilize/gunshot-api-service/internal/controller/http/dto"
 	"github.com/Imm0bilize/gunshot-api-service/internal/entities"
 	"github.com/Imm0bilize/gunshot-api-service/internal/infrastructure/repository"
+	"github.com/Imm0bilize/gunshot-api-service/internal/uCase"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
@@ -22,7 +23,7 @@ func (h *Handler) RegisterNewClient(c *gin.Context) {
 	)
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, dto.ErrorResponse{Msg: err.Error()})
 		return
 	}
 
@@ -44,11 +45,11 @@ func (h *Handler) RegisterNewClient(c *gin.Context) {
 	)
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, dto.ErrorResponse{Msg: err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusCreated, gin.H{"clientID": id})
+	c.JSON(http.StatusCreated, dto.RegisterResponse{ClientID: id})
 	return
 }
 
@@ -60,7 +61,7 @@ func (h *Handler) UpdateClient(c *gin.Context) {
 	)
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
+		c.JSON(http.StatusUnprocessableEntity, dto.ErrorResponse{Msg: err.Error()})
 		return
 	}
 
@@ -79,10 +80,10 @@ func (h *Handler) UpdateClient(c *gin.Context) {
 
 	if err != nil {
 		if errors.Is(err, repository.ErrClientNotFound) {
-			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+			c.JSON(http.StatusNotFound, dto.ErrorResponse{Msg: err.Error()})
 		}
 
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, dto.ErrorResponse{Msg: err.Error()})
 	}
 
 }
@@ -96,11 +97,11 @@ func (h *Handler) GetClient(c *gin.Context) {
 	client, err := h.domain.Client.Get(c.Request.Context(), requestID, clientID)
 	if err != nil {
 		if errors.Is(err, repository.ErrClientNotFound) {
-			c.JSON(http.StatusNotFound, gin.H{"error": "the client not found"})
+			c.JSON(http.StatusNotFound, dto.ErrorResponse{Msg: err.Error()})
 			return
 		}
 
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, dto.ErrorResponse{Msg: err.Error()})
 		return
 	}
 
@@ -139,6 +140,8 @@ func (h *Handler) UploadAudio(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": fmt.Sprintf("can't convert string nsec to int: %s", err.Error()),
 		})
+
+		return
 	}
 
 	timestamp = time.Unix(0, int64(nsec))
@@ -174,6 +177,11 @@ func (h *Handler) UploadAudio(c *gin.Context) {
 		})
 
 	if err != nil {
+		if errors.Is(err, uCase.ErrNotEqRequiredLength) {
+			c.JSON(http.StatusBadRequest, dto.ErrorResponse{Msg: err.Error()})
+			return
+		}
+
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": fmt.Sprintf("can't send audio for processing: %s", err.Error()),
 		})

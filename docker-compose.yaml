@@ -27,7 +27,7 @@ services:
       - ALLOW_ANONYMOUS_LOGIN=yes
   kafka:
     container_name: kafka
-    image: 'bitnami/kafka:latest'
+    image: 'bitnami/kafka:3.1.2'
     ports:
       - '9092:9092'
     environment:
@@ -54,3 +54,15 @@ services:
     image: mongo:latest
     ports:
       - "27017:27017"
+  ml_service:
+    image: pytorch/torchserve:latest-cpu
+    container_name: ml-service
+    volumes:
+      - "/Users/nikolay/PythonProjects/gunshot-ml-service/model_store/:/home/model-server/model-store"
+      - "/Users/nikolay/PythonProjects/gunshot-ml-service/config.properties:/home/model-server/config.properties"
+    ports:
+      - "8085:8080"
+      - "8086:8081"
+      - "8087:8082"
+      - "7070:7070"
+      - "7071:7071"
