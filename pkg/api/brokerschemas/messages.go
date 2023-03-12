@@ -6,6 +6,6 @@ import (
 )
 
 type AudioMessage struct {
-	RequestID uuid.UUID             `json:"requestID"`
-	Payload   entities.AudioMessage `json:"payload"`
+	Payload   entities.Message `json:"payload"`
+	RequestID uuid.UUID        `json:"requestID"`
 }

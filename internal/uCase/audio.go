@@ -13,7 +13,7 @@ import (
 )
 
 type Sender interface {
-	Send(ctx context.Context, reqID uuid.UUID, msg entities.AudioMessage) error
+	Send(ctx context.Context, reqID uuid.UUID, msg entities.Message) error
 }
 
 type Audio struct {
@@ -36,7 +36,7 @@ func NewAudioUCase(logger *zap.Logger, audioSender Sender, audioLength int) *Aud
 	}
 }
 
-func (a Audio) Upload(ctx context.Context, reqID uuid.UUID, clientID string, msg entities.AudioMessage) error {
+func (a Audio) Upload(ctx context.Context, reqID uuid.UUID, clientID string, msg entities.Message) error {
 	ctx, span := a.tracer.Start(ctx, "uCase.Audio.Upload")
 	defer span.End()
 
@@ -46,9 +46,9 @@ func (a Audio) Upload(ctx context.Context, reqID uuid.UUID, clientID string, msg
 	}
 	msg.ID = castedID
 
-	if err := a.validate(msg.Payload); err != nil {
-		return errors.Wrap(err, "validation error")
-	}
+	//if err := a.validate(msg.Payload); err != nil {
+	//	return errors.Wrap(err, "validation error")
+	//}
 
 	if err := a.audioSender.Send(ctx, reqID, msg); err != nil {
 		span.RecordError(err)

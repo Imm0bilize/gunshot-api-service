@@ -21,7 +21,7 @@ type ClientUseCase interface {
 }
 
 type AudioUseCase interface {
-	Upload(ctx context.Context, reqID uuid.UUID, id string, msg entities.AudioMessage) error
+	Upload(ctx context.Context, reqID uuid.UUID, id string, msg entities.Message) error
 }
 
 type UseCase struct {
