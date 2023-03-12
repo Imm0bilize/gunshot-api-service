@@ -14,3 +14,11 @@ type UploadAudioRequest struct {
 	Timestamp time.Time `url:"ts" binding:"required"`
 	ID        string    `url:"id" binding:"required"`
 }
+
+type RegisterResponse struct {
+	ClientID string `json:"clientID"`
+}
+
+type ErrorResponse struct {
+	Msg string `json:"error"`
+}

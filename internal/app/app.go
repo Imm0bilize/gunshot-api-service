@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"github.com/Imm0bilize/gunshot-api-service/internal/config"
-	"github.com/Imm0bilize/gunshot-api-service/internal/controller/grpc"
 	"github.com/Imm0bilize/gunshot-api-service/internal/controller/http"
 	"github.com/Imm0bilize/gunshot-api-service/internal/infrastructure/msbroker"
 	"github.com/Imm0bilize/gunshot-api-service/internal/infrastructure/repository"
@@ -13,12 +12,12 @@ import (
 	"github.com/pkg/errors"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
-	"go.opentelemetry.io/contrib/instrumentation/github.com/Shopify/sarama/otelsarama"
 	"go.opentelemetry.io/contrib/instrumentation/go.mongodb.org/mongo-driver/mongo/otelmongo"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
+	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.uber.org/zap"
@@ -54,6 +53,7 @@ func createTraceProvider(cfg config.OTELConfig) func(context.Context) error {
 		log.Printf("Could not set resources: ", err)
 	}
 
+	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}))
 	otel.SetTracerProvider(
 		sdktrace.NewTracerProvider(
 			sdktrace.WithSampler(sdktrace.AlwaysSample()),
@@ -67,7 +67,7 @@ func createTraceProvider(cfg config.OTELConfig) func(context.Context) error {
 
 func createKafkaProducer(cfg config.KafkaConfig) (sarama.SyncProducer, error) {
 	kfkCfg := sarama.NewConfig()
-	kfkCfg.Version = sarama.V2_5_0_0
+	kfkCfg.Version = sarama.V3_3_0_0
 	kfkCfg.Producer.Return.Successes = true
 
 	producer, err := sarama.NewSyncProducer(strings.Split(cfg.Peers, ","), kfkCfg)
@@ -75,7 +75,7 @@ func createKafkaProducer(cfg config.KafkaConfig) (sarama.SyncProducer, error) {
 		return nil, errors.Wrap(err, "error during create producer")
 	}
 
-	producer = otelsarama.WrapSyncProducer(kfkCfg, producer)
+	//producer = otelsarama.WrapSyncProducer(kfkCfg, producer)
 
 	return producer, nil
 }
@@ -144,24 +144,9 @@ func Run(cfg *config.Config) {
 	//http server
 	httpServer := http.NewHTTPServer(logger, useCase)
 
-	// grpc server
-	listener, err := net.Listen("tcp", ":"+cfg.GRPC.Port)
-	if err != nil {
-		logger.Fatal(err.Error())
-	}
-
-	//httpServer.Run(net.JoinHostPort("", cfg.HTTP.Port))
 	go func() {
 		if err := httpServer.Run(fmt.Sprintf(":%s", cfg.HTTP.Port)); err != nil {
 			panic(err)
-		}
-	}()
-
-	grpcServer := grpc.NewGRPCServer(logger, useCase)
-
-	go func() {
-		if err := grpcServer.Serve(listener); err != nil {
-			log.Fatal("error during grpc server work", zap.Error(err))
 		}
 	}()
 
@@ -172,10 +157,6 @@ func Run(cfg *config.Config) {
 
 	ctx, shutdownFunc := context.WithTimeout(context.Background(), time.Second*10)
 	defer shutdownFunc()
-
-	if err = grpc.Shutdown(ctx, grpcServer); err != nil {
-		logger.Error("error shutting down grpc server", zap.Error(err))
-	}
 
 	if err = dbShutdown(ctx); err != nil {
 		logger.Error("error when closing database connection", zap.Error(err))

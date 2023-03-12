@@ -13,7 +13,7 @@ import (
 )
 
 type Sender interface {
-	Send(ctx context.Context, reqID uuid.UUID, msg entities.AudioMessage) error
+	Send(ctx context.Context, reqID uuid.UUID, msg entities.Message) error
 }
 
 type Audio struct {
@@ -24,7 +24,7 @@ type Audio struct {
 }
 
 var (
-	errNotEqRequiredLength = errors.New("the audio not equal to the required length")
+	ErrNotEqRequiredLength = errors.New("the audio not equal to the required length")
 )
 
 func NewAudioUCase(logger *zap.Logger, audioSender Sender, audioLength int) *Audio {
@@ -36,7 +36,7 @@ func NewAudioUCase(logger *zap.Logger, audioSender Sender, audioLength int) *Aud
 	}
 }
 
-func (a Audio) Upload(ctx context.Context, reqID uuid.UUID, clientID string, msg entities.AudioMessage) error {
+func (a Audio) Upload(ctx context.Context, reqID uuid.UUID, clientID string, msg entities.Message) error {
 	ctx, span := a.tracer.Start(ctx, "uCase.Audio.Upload")
 	defer span.End()
 
@@ -46,9 +46,9 @@ func (a Audio) Upload(ctx context.Context, reqID uuid.UUID, clientID string, msg
 	}
 	msg.ID = castedID
 
-	if err := a.validate(msg.Payload); err != nil {
-		return errors.Wrap(err, "validation error")
-	}
+	//if err := a.validate(msg.Payload); err != nil {
+	//	return errors.Wrap(err, "validation error")
+	//}
 
 	if err := a.audioSender.Send(ctx, reqID, msg); err != nil {
 		span.RecordError(err)
@@ -61,7 +61,7 @@ func (a Audio) Upload(ctx context.Context, reqID uuid.UUID, clientID string, msg
 func (a Audio) validate(audio []byte) error {
 	if len(audio) != a.audioLength {
 		return fmt.Errorf(
-			"%w: expected %d (bytes), got %d (bytes)", errNotEqRequiredLength, a.audioLength, len(audio),
+			"%w: expected %d (bytes), got %d (bytes)", ErrNotEqRequiredLength, a.audioLength, len(audio),
 		)
 	}
 

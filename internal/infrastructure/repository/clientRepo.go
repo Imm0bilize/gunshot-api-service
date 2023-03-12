@@ -72,11 +72,10 @@ func (c ClientRepo) Update(ctx context.Context, id string, client *entities.Clie
 
 	update := bson.M{
 		"$set": bson.M{
-			"locationName":       client.LocationName,
-			"fullName":           client.FullName,
-			"latitude":           client.Latitude,
-			"longitude":          client.Longitude,
-			"notificationMethod": client.NotificationMethods,
+			"locationName": client.LocationName,
+			"fullName":     client.FullName,
+			"latitude":     client.Latitude,
+			"longitude":    client.Longitude,
 		},
 	}
 

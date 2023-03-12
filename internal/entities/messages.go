@@ -5,8 +5,9 @@ import (
 	"time"
 )
 
-type AudioMessage struct {
-	ID        primitive.ObjectID `json:"ID"`
-	Timestamp time.Time          `json:"timestamp"`
-	Payload   []byte             `json:"payload"`
+type Message struct {
+	Payload     []byte             `json:"payload"`
+	Timestamp   time.Time          `json:"timestamp"`
+	MessageType string             `json:"messageType"`
+	ID          primitive.ObjectID `json:"ID"`
 }

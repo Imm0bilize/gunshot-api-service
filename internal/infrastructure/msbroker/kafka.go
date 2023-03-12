@@ -33,8 +33,8 @@ func NewKafkaProducer(logger *zap.Logger, producer sarama.SyncProducer, topic st
 	}
 }
 
-func (k *KafkaProducer) Send(ctx context.Context, reqID uuid.UUID, message entities.AudioMessage) error {
-	ctx, span := k.tracer.Start(context.Background(), "msbroker.Send")
+func (k *KafkaProducer) Send(ctx context.Context, reqID uuid.UUID, message entities.Message) error {
+	ctx, span := k.tracer.Start(ctx, "msbroker.Send")
 	defer span.End()
 
 	msg := brokerschemas.AudioMessage{
